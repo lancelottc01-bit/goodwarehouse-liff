@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>好貨倉</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <div id="app">
+    <header class="topbar">
+      <div class="brand">🏬 好貨倉</div>
+      <div class="cart-btn" onclick="showCart()">🛒 <span id="cartCount">0</span></div>
+    </header>
+
+    <section class="hero">
+      <h1>好貨倉<br>補貨更輕鬆</h1>
+      <p>商品齊全・價格透明・回饋實在</p>
+      <button onclick="scrollToProducts()">立即補貨</button>
+    </section>
+
+    <section class="summary">
+      <div>
+        <small>本月採購額</small>
+        <strong>52,300</strong>
+      </div>
+      <div>
+        <small>本月回饋金</small>
+        <strong>1,248</strong>
+      </div>
+    </section>
+
+    <section class="search-box">
+      <input id="keyword" placeholder="搜尋商品名稱 / 條碼" oninput="renderProducts()" />
+    </section>
+
+    <section class="categories" id="categories"></section>
+
+    <main id="products" class="products"></main>
+  </div>
+
+  <div id="cartPage" class="page hidden">
+    <header class="topbar">
+      <button onclick="backHome()">←</button>
+      <strong>補貨車</strong>
+      <span></span>
+    </header>
+
+    <div id="cartItems"></div>
+
+    <div class="checkout-box">
+      <div>商品金額 <b id="cartTotal">0</b></div>
+      <div>預計回饋 <b id="cartReward">0</b></div>
+      <button onclick="submitOrder()">確認下單</button>
+    </div>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>
