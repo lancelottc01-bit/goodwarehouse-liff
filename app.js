@@ -10,6 +10,25 @@ function money(n) {
   return Number(n || 0).toLocaleString('zh-TW');
 }
 
+// 給 Vercel 讀 Apps Script 用，避免 CORS 擋住
+function jsonp(url) {
+  return new Promise((resolve, reject) => {
+    const callbackName = 'jsonp_callback_' + Date.now();
+
+    window[callbackName] = (data) => {
+      delete window[callbackName];
+      script.remove();
+      resolve(data);
+    };
+
+    const script = document.createElement('script');
+    script.src = `${url}&callback=${callbackName}`;
+    script.onerror = reject;
+
+    document.body.appendChild(script);
+  });
+}
+
 async function init() {
   await loadProducts();
   renderCategories();
@@ -19,8 +38,7 @@ async function init() {
 
 async function loadProducts() {
   try {
-    const res = await fetch(`${API_URL}?action=products`);
-    const data = await res.json();
+    const data = await jsonp(`${API_URL}?action=products`);
     products = data.products || [];
   } catch (err) {
     alert('商品讀取失敗，請確認 Apps Script 是否部署成功');
@@ -49,10 +67,19 @@ function renderProducts() {
 
   const list = products.filter(p => {
     const matchCategory = currentCategory === '全部' || p.category === currentCategory;
-    const text = `${p.name} ${p.barcode} ${p.keywords}`.toLowerCase();
+    const text = `${p.name || ''} ${p.barcode || ''} ${p.keywords || ''}`.toLowerCase();
     const matchKeyword = !keyword || text.includes(keyword);
     return matchCategory && matchKeyword;
   });
+
+  if (!list.length) {
+    $('products').innerHTML = `
+      <div style="padding:24px;text-align:center;color:#6b7280;">
+        目前沒有商品資料
+      </div>
+    `;
+    return;
+  }
 
   $('products').innerHTML = list.map(p => {
     const rewardClass = Number(p.rewardRate) === 3 ? 'r3' : Number(p.rewardRate) === 1 ? 'r1' : 'r0';
@@ -64,7 +91,7 @@ function renderProducts() {
         <img src="${p.image || 'https://placehold.co/300x300/eef4ff/0046b8?text=好貨倉'}" />
         
         <div>
-          <div class="product-name">${p.name}</div>
+          <div class="product-name">${p.name || ''}</div>
           <div class="barcode">${p.barcode || ''}</div>
 
           <div class="price-label">批發價</div>
@@ -144,32 +171,40 @@ function renderCart() {
   let total = 0;
   let reward = 0;
 
-  $('cartItems').innerHTML = cartProducts.map(p => {
-    const qty = Number(cart[p.productId] || 0);
-    const amount = Number(p.wholesalePrice || 0) * qty;
-    const rewardAmount = amount * Number(p.rewardRate || 0) / 100;
-
-    total += amount;
-    reward += rewardAmount;
-
-    return `
-      <div class="cart-item">
-        <img src="${p.image || 'https://placehold.co/300x300/eef4ff/0046b8?text=好貨倉'}" />
-        <div>
-          <div class="product-name">${p.name}</div>
-          <div class="price-label">批發價</div>
-          <div class="wholesale-price">${money(p.wholesalePrice)}</div>
-          <div class="suggest-price">小計 ${money(amount)}</div>
-
-          <div class="qty-row">
-            <button onclick="changeQty('${p.productId}', -1)">−</button>
-            <strong>${qty}</strong>
-            <button onclick="changeQty('${p.productId}', 1)">＋</button>
-          </div>
-        </div>
+  if (!cartProducts.length) {
+    $('cartItems').innerHTML = `
+      <div style="padding:24px;text-align:center;color:#6b7280;">
+        補貨車是空的
       </div>
     `;
-  }).join('');
+  } else {
+    $('cartItems').innerHTML = cartProducts.map(p => {
+      const qty = Number(cart[p.productId] || 0);
+      const amount = Number(p.wholesalePrice || 0) * qty;
+      const rewardAmount = amount * Number(p.rewardRate || 0) / 100;
+
+      total += amount;
+      reward += rewardAmount;
+
+      return `
+        <div class="cart-item">
+          <img src="${p.image || 'https://placehold.co/300x300/eef4ff/0046b8?text=好貨倉'}" />
+          <div>
+            <div class="product-name">${p.name || ''}</div>
+            <div class="price-label">批發價</div>
+            <div class="wholesale-price">${money(p.wholesalePrice)}</div>
+            <div class="suggest-price">小計 ${money(amount)}</div>
+
+            <div class="qty-row">
+              <button onclick="changeQty('${p.productId}', -1)">−</button>
+              <strong>${qty}</strong>
+              <button onclick="changeQty('${p.productId}', 1)">＋</button>
+            </div>
+          </div>
+        </div>
+      `;
+    }).join('');
+  }
 
   $('cartTotal').textContent = money(total);
   $('cartReward').textContent = money(Math.round(reward));
