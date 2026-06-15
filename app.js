@@ -13,7 +13,6 @@ function money(n) {
 function jsonp(url) {
   return new Promise((resolve, reject) => {
     const callbackName = 'jsonp_callback_' + Math.random().toString(36).substring(2);
-
     const script = document.createElement('script');
 
     window[callbackName] = function(data) {
@@ -47,7 +46,9 @@ async function loadProducts() {
     const data = await jsonp(`${API_URL}?action=products`);
     console.log('商品資料：', data);
 
-    if (!data.ok) throw new Error('API 回傳失敗');
+    if (!data.ok) {
+      throw new Error(data.message || 'API 回傳失敗');
+    }
 
     products = data.products || [];
   } catch (err) {
@@ -223,6 +224,7 @@ async function submitOrder() {
 
   const items = ids.map(id => {
     const p = products.find(x => x.productId === id);
+
     return {
       productId: p.productId,
       name: p.name,
@@ -234,7 +236,6 @@ async function submitOrder() {
   });
 
   const payload = {
-    action: 'createOrder',
     uid: 'test-user',
     customerName: '測試店家',
     phone: '',
@@ -243,26 +244,35 @@ async function submitOrder() {
   };
 
   try {
-    const res = await fetch(API_URL, {
-      method: 'POST',
-      body: JSON.stringify(payload)
-    });
+    const url =
+      API_URL +
+      '?action=createOrder' +
+      '&payload=' +
+      encodeURIComponent(JSON.stringify(payload));
 
-    const data = await res.json();
+    const data = await jsonp(url);
+
+    console.log('下單結果：', data);
 
     if (data.ok) {
-      alert(`下單成功\n訂單編號：${data.orderId || ''}\n訂單金額：${money(data.orderAmount || 0)}`);
+      alert(
+        '下單成功\n' +
+        '訂單編號：' + data.orderId + '\n' +
+        '訂單金額：' + money(data.orderAmount) + '\n' +
+        '淨毛利：' + money(data.netProfit)
+      );
+
       cart = {};
       saveCart();
       updateCartCount();
       backHome();
       renderProducts();
     } else {
-      alert('下單失敗');
+      alert('下單失敗：' + (data.message || '未知錯誤'));
     }
   } catch (err) {
-    console.error(err);
-    alert('送出訂單失敗，請確認 Apps Script 權限');
+    console.error('送出訂單失敗：', err);
+    alert('送出訂單失敗');
   }
 }
 
