@@ -10,20 +10,26 @@ function money(n) {
   return Number(n || 0).toLocaleString('zh-TW');
 }
 
-// 給 Vercel 讀 Apps Script 用，避免 CORS 擋住
 function jsonp(url) {
   return new Promise((resolve, reject) => {
-    const callbackName = 'jsonp_callback_' + Date.now();
-
-    window[callbackName] = (data) => {
-      delete window[callbackName];
-      script.remove();
-      resolve(data);
-    };
+    const callbackName = 'jsonp_callback_' + Math.random().toString(36).substring(2);
 
     const script = document.createElement('script');
-    script.src = `${url}&callback=${callbackName}`;
-    script.onerror = reject;
+
+    window[callbackName] = function(data) {
+      resolve(data);
+      delete window[callbackName];
+      document.body.removeChild(script);
+    };
+
+    const separator = url.includes('?') ? '&' : '?';
+    script.src = url + separator + 'callback=' + callbackName + '&t=' + Date.now();
+
+    script.onerror = function() {
+      delete window[callbackName];
+      document.body.removeChild(script);
+      reject(new Error('JSONP 載入失敗'));
+    };
 
     document.body.appendChild(script);
   });
@@ -39,10 +45,14 @@ async function init() {
 async function loadProducts() {
   try {
     const data = await jsonp(`${API_URL}?action=products`);
+    console.log('商品資料：', data);
+
+    if (!data.ok) throw new Error('API 回傳失敗');
+
     products = data.products || [];
   } catch (err) {
+    console.error('商品讀取失敗：', err);
     alert('商品讀取失敗，請確認 Apps Script 是否部署成功');
-    console.error(err);
   }
 }
 
@@ -114,12 +124,7 @@ function addToCart(productId) {
   if (!product) return;
 
   const step = Number(product.purchaseUnit || 1);
-
-  if (!cart[productId]) {
-    cart[productId] = step;
-  } else {
-    cart[productId] += step;
-  }
+  cart[productId] = (cart[productId] || 0) + step;
 
   saveCart();
   updateCartCount();
@@ -130,8 +135,7 @@ function changeQty(productId, direction) {
   if (!product) return;
 
   const step = Number(product.purchaseUnit || 1);
-  const current = Number(cart[productId] || 0);
-  const next = current + direction * step;
+  const next = Number(cart[productId] || 0) + direction * step;
 
   if (next <= 0) {
     delete cart[productId];
@@ -149,8 +153,7 @@ function saveCart() {
 }
 
 function updateCartCount() {
-  const count = Object.keys(cart).length;
-  $('cartCount').textContent = count;
+  $('cartCount').textContent = Object.keys(cart).length;
 }
 
 function showCart() {
@@ -212,6 +215,7 @@ function renderCart() {
 
 async function submitOrder() {
   const ids = Object.keys(cart);
+
   if (!ids.length) {
     alert('補貨車是空的');
     return;
@@ -247,7 +251,7 @@ async function submitOrder() {
     const data = await res.json();
 
     if (data.ok) {
-      alert(`下單成功\n訂單編號：${data.orderId}\n訂單金額：${money(data.orderAmount)}\n淨毛利：${money(data.netProfit)}`);
+      alert(`下單成功\n訂單編號：${data.orderId || ''}\n訂單金額：${money(data.orderAmount || 0)}`);
       cart = {};
       saveCart();
       updateCartCount();
