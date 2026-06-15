@@ -1,0 +1,234 @@
+const API_URL = 'https://script.google.com/macros/s/AKfycbxfjMrOWpMoFQpMqxwljZ9Y2DSqvIPcGg2ayt9hbkXZ6Hsin0vpHH9fZLET16gy4enzKw/exec';
+
+let products = [];
+let cart = JSON.parse(localStorage.getItem('goodwarehouse_cart') || '{}');
+let currentCategory = '全部';
+
+const $ = (id) => document.getElementById(id);
+
+function money(n) {
+  return Number(n || 0).toLocaleString('zh-TW');
+}
+
+async function init() {
+  await loadProducts();
+  renderCategories();
+  renderProducts();
+  updateCartCount();
+}
+
+async function loadProducts() {
+  try {
+    const res = await fetch(`${API_URL}?action=products`);
+    const data = await res.json();
+    products = data.products || [];
+  } catch (err) {
+    alert('商品讀取失敗，請確認 Apps Script 是否部署成功');
+    console.error(err);
+  }
+}
+
+function renderCategories() {
+  const cats = ['全部', ...new Set(products.map(p => p.category).filter(Boolean))];
+
+  $('categories').innerHTML = cats.map(cat => `
+    <button class="category ${cat === currentCategory ? 'active' : ''}" onclick="setCategory('${cat}')">
+      ${cat}
+    </button>
+  `).join('');
+}
+
+function setCategory(cat) {
+  currentCategory = cat;
+  renderCategories();
+  renderProducts();
+}
+
+function renderProducts() {
+  const keyword = $('keyword')?.value?.trim().toLowerCase() || '';
+
+  const list = products.filter(p => {
+    const matchCategory = currentCategory === '全部' || p.category === currentCategory;
+    const text = `${p.name} ${p.barcode} ${p.keywords}`.toLowerCase();
+    const matchKeyword = !keyword || text.includes(keyword);
+    return matchCategory && matchKeyword;
+  });
+
+  $('products').innerHTML = list.map(p => {
+    const rewardClass = Number(p.rewardRate) === 3 ? 'r3' : Number(p.rewardRate) === 1 ? 'r1' : 'r0';
+    const rewardText = Number(p.rewardRate) > 0 ? `${p.rewardRate}% 回饋` : '不回饋';
+    const unit = Number(p.purchaseUnit || 1);
+
+    return `
+      <div class="product-card">
+        <img src="${p.image || 'https://placehold.co/300x300/eef4ff/0046b8?text=好貨倉'}" />
+        
+        <div>
+          <div class="product-name">${p.name}</div>
+          <div class="barcode">${p.barcode || ''}</div>
+
+          <div class="price-label">批發價</div>
+          <div class="wholesale-price">${money(p.wholesalePrice)}</div>
+
+          <div class="suggest-price">建議售價 ${money(p.suggestPrice)}</div>
+
+          <span class="reward ${rewardClass}">${rewardText}</span>
+          ${unit > 1 ? `<div class="unit">需單包購買 ${unit} 入</div>` : ''}
+        </div>
+
+        <button class="add-btn" onclick="addToCart('${p.productId}')">+</button>
+      </div>
+    `;
+  }).join('');
+}
+
+function addToCart(productId) {
+  const product = products.find(p => p.productId === productId);
+  if (!product) return;
+
+  const step = Number(product.purchaseUnit || 1);
+
+  if (!cart[productId]) {
+    cart[productId] = step;
+  } else {
+    cart[productId] += step;
+  }
+
+  saveCart();
+  updateCartCount();
+}
+
+function changeQty(productId, direction) {
+  const product = products.find(p => p.productId === productId);
+  if (!product) return;
+
+  const step = Number(product.purchaseUnit || 1);
+  const current = Number(cart[productId] || 0);
+  const next = current + direction * step;
+
+  if (next <= 0) {
+    delete cart[productId];
+  } else {
+    cart[productId] = next;
+  }
+
+  saveCart();
+  updateCartCount();
+  renderCart();
+}
+
+function saveCart() {
+  localStorage.setItem('goodwarehouse_cart', JSON.stringify(cart));
+}
+
+function updateCartCount() {
+  const count = Object.keys(cart).length;
+  $('cartCount').textContent = count;
+}
+
+function showCart() {
+  $('app').classList.add('hidden');
+  $('cartPage').classList.remove('hidden');
+  renderCart();
+}
+
+function backHome() {
+  $('cartPage').classList.add('hidden');
+  $('app').classList.remove('hidden');
+}
+
+function renderCart() {
+  const ids = Object.keys(cart);
+  const cartProducts = ids.map(id => products.find(p => p.productId === id)).filter(Boolean);
+
+  let total = 0;
+  let reward = 0;
+
+  $('cartItems').innerHTML = cartProducts.map(p => {
+    const qty = Number(cart[p.productId] || 0);
+    const amount = Number(p.wholesalePrice || 0) * qty;
+    const rewardAmount = amount * Number(p.rewardRate || 0) / 100;
+
+    total += amount;
+    reward += rewardAmount;
+
+    return `
+      <div class="cart-item">
+        <img src="${p.image || 'https://placehold.co/300x300/eef4ff/0046b8?text=好貨倉'}" />
+        <div>
+          <div class="product-name">${p.name}</div>
+          <div class="price-label">批發價</div>
+          <div class="wholesale-price">${money(p.wholesalePrice)}</div>
+          <div class="suggest-price">小計 ${money(amount)}</div>
+
+          <div class="qty-row">
+            <button onclick="changeQty('${p.productId}', -1)">−</button>
+            <strong>${qty}</strong>
+            <button onclick="changeQty('${p.productId}', 1)">＋</button>
+          </div>
+        </div>
+      </div>
+    `;
+  }).join('');
+
+  $('cartTotal').textContent = money(total);
+  $('cartReward').textContent = money(Math.round(reward));
+}
+
+async function submitOrder() {
+  const ids = Object.keys(cart);
+  if (!ids.length) {
+    alert('補貨車是空的');
+    return;
+  }
+
+  const items = ids.map(id => {
+    const p = products.find(x => x.productId === id);
+    return {
+      productId: p.productId,
+      name: p.name,
+      costPrice: p.costPrice,
+      salePrice: p.wholesalePrice,
+      qty: cart[id],
+      rewardRate: p.rewardRate
+    };
+  });
+
+  const payload = {
+    action: 'createOrder',
+    uid: 'test-user',
+    customerName: '測試店家',
+    phone: '',
+    address: '',
+    items
+  };
+
+  try {
+    const res = await fetch(API_URL, {
+      method: 'POST',
+      body: JSON.stringify(payload)
+    });
+
+    const data = await res.json();
+
+    if (data.ok) {
+      alert(`下單成功\n訂單編號：${data.orderId}\n訂單金額：${money(data.orderAmount)}\n淨毛利：${money(data.netProfit)}`);
+      cart = {};
+      saveCart();
+      updateCartCount();
+      backHome();
+      renderProducts();
+    } else {
+      alert('下單失敗');
+    }
+  } catch (err) {
+    console.error(err);
+    alert('送出訂單失敗，請確認 Apps Script 權限');
+  }
+}
+
+function scrollToProducts() {
+  document.getElementById('products').scrollIntoView({ behavior: 'smooth' });
+}
+
+init();
