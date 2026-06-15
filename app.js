@@ -1,4 +1,4 @@
-const API_URL = 'https://script.google.com/macros/s/AKfycbxfjMrOWpMoFQpMqxwljZ9Y2DSqvIPcGg2ayt9hbkXZ6Hsin0vpHH9fZLET16gy4enzKw/exec';
+https://script.google.com/macros/s/AKfycbx_0g5yf7HmGI6jvV48q0TIPFyhJPkDZiOzMGlnGmIxSGIhtdalr7I7SmVDNqQTO3mskw/exec
 
 let products = [];
 let cart = JSON.parse(localStorage.getItem('goodwarehouse_cart') || '{}');
