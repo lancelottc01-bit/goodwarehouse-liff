@@ -1,4 +1,4 @@
-const API_URL = 'https://script.google.com/macros/s/AKfycbwlM8l9xocKPsbfh6gjP3_yi10n4qVUfHhKmz_eGHyFK9LVSVbgIh4R61bVu0uF0Q5a3Q/exec';
+const API_URL = 'https://script.google.com/macros/s/AKfycbzdeK0Q5dCmMyhUMNY__z2wzB6p51P_8immSPm962AsznqL2aTisptzhK-zGUZamoY5_Q/exec';
 
 let products = [];
 let cart = JSON.parse(localStorage.getItem('goodwarehouse_cart') || '{}');
@@ -50,6 +50,8 @@ async function init() {
 }
 
 function showLogin() {
+  if (document.getElementById('loginModal')) return;
+
   const box = document.createElement('div');
   box.id = 'loginModal';
   box.innerHTML = `
@@ -100,8 +102,14 @@ function logoutCustomer() {
 
 function renderCustomer() {
   const brand = document.querySelector('.brand');
+
   if (brand && currentCustomer) {
-    brand.innerHTML = `🏬 ${currentCustomer.shopName || '好貨倉'}`;
+    brand.innerHTML = `
+      🏬 ${currentCustomer.shopName || '好貨倉'}
+      <div style="font-size:12px;font-weight:500;color:#6b7280;">
+        ${currentCustomer.owner || ''}
+      </div>
+    `;
   }
 }
 
@@ -119,10 +127,49 @@ async function loadCustomerSummary() {
   }
 }
 
+async function showOrders() {
+  if (!currentCustomer) {
+    alert('請先登入');
+    showLogin();
+    return;
+  }
+
+  const data = await jsonp(
+    `${API_URL}?action=getMyOrders&uid=${encodeURIComponent(currentCustomer.uid)}`
+  );
+
+  if (!data.ok) {
+    alert(data.message || '讀取訂單失敗');
+    return;
+  }
+
+  if (!data.orders || !data.orders.length) {
+    alert('目前沒有訂單');
+    return;
+  }
+
+  let text = '我的訂單\n\n';
+
+  data.orders.forEach(o => {
+    text +=
+      '訂單編號：' + o.orderId + '\n' +
+      '日期：' + o.orderDate + '\n' +
+      '金額：' + money(o.orderAmount) + '\n' +
+      '回饋：' + money(o.rewardAmount) + '\n' +
+      '狀態：' + o.status + '\n\n';
+  });
+
+  alert(text);
+}
+
 async function loadProducts() {
   try {
     const data = await jsonp(`${API_URL}?action=products`);
-    if (!data.ok) throw new Error(data.message || 'API 回傳失敗');
+
+    if (!data.ok) {
+      throw new Error(data.message || 'API 回傳失敗');
+    }
+
     products = data.products || [];
   } catch (err) {
     console.error(err);
@@ -168,15 +215,20 @@ function renderProducts() {
     return `
       <div class="product-card">
         <img src="${p.image || 'https://placehold.co/300x300/eef4ff/0046b8?text=好貨倉'}" />
+
         <div>
           <div class="product-name">${p.name || ''}</div>
           <div class="barcode">${p.barcode || ''}</div>
+
           <div class="price-label">批發價</div>
           <div class="wholesale-price">${money(p.wholesalePrice)}</div>
+
           <div class="suggest-price">建議售價 ${money(p.suggestPrice)}</div>
+
           <span class="reward ${rewardClass}">${rewardText}</span>
           ${unit > 1 ? `<div class="unit">需單包購買 ${unit} 入</div>` : ''}
         </div>
+
         <button class="add-btn" onclick="addToCart('${p.productId}')">+</button>
       </div>
     `;
@@ -201,8 +253,11 @@ function changeQty(productId, direction) {
   const step = Number(product.purchaseUnit || 1);
   const next = Number(cart[productId] || 0) + direction * step;
 
-  if (next <= 0) delete cart[productId];
-  else cart[productId] = next;
+  if (next <= 0) {
+    delete cart[productId];
+  } else {
+    cart[productId] = next;
+  }
 
   saveCart();
   updateCartCount();
@@ -254,6 +309,7 @@ function renderCart() {
             <div class="price-label">批發價</div>
             <div class="wholesale-price">${money(p.wholesalePrice)}</div>
             <div class="suggest-price">小計 ${money(amount)}</div>
+
             <div class="qty-row">
               <button onclick="changeQty('${p.productId}', -1)">−</button>
               <strong>${qty}</strong>
@@ -285,6 +341,7 @@ async function submitOrder() {
 
   const items = ids.map(id => {
     const p = products.find(x => x.productId === id);
+
     return {
       productId: p.productId,
       name: p.name,
@@ -303,30 +360,35 @@ async function submitOrder() {
     items
   };
 
-  const url =
-    API_URL +
-    '?action=createOrder' +
-    '&payload=' +
-    encodeURIComponent(JSON.stringify(payload));
+  try {
+    const url =
+      API_URL +
+      '?action=createOrder' +
+      '&payload=' +
+      encodeURIComponent(JSON.stringify(payload));
 
-  const data = await jsonp(url);
+    const data = await jsonp(url);
 
-  if (data.ok) {
-    alert(
-      '下單成功\n' +
-      '訂單編號：' + data.orderId + '\n' +
-      '本單總金額：' + money(data.orderAmount) + '\n' +
-      '本單回饋：' + money(data.rewardAmount)
-    );
+    if (data.ok) {
+      alert(
+        '下單成功\n' +
+        '訂單編號：' + data.orderId + '\n' +
+        '本單總金額：' + money(data.orderAmount) + '\n' +
+        '本單回饋：' + money(data.rewardAmount)
+      );
 
-    cart = {};
-    saveCart();
-    updateCartCount();
-    backHome();
-    renderProducts();
-    loadCustomerSummary();
-  } else {
-    alert('下單失敗：' + (data.message || '未知錯誤'));
+      cart = {};
+      saveCart();
+      updateCartCount();
+      backHome();
+      renderProducts();
+      loadCustomerSummary();
+    } else {
+      alert('下單失敗：' + (data.message || '未知錯誤'));
+    }
+  } catch (err) {
+    console.error(err);
+    alert('送出訂單失敗');
   }
 }
 
