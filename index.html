@@ -10,7 +10,11 @@
   <div id="app">
     <header class="topbar">
       <div class="brand">🏬 好貨倉</div>
-      <div class="cart-btn" onclick="showCart()">🛒 <span id="cartCount">0</span></div>
+
+      <div style="display:flex;gap:8px;align-items:center;">
+        <button onclick="showOrders()">📦 我的訂單</button>
+        <div class="cart-btn" onclick="showCart()">🛒 <span id="cartCount">0</span></div>
+      </div>
     </header>
 
     <section class="hero">
@@ -22,11 +26,11 @@
     <section class="summary">
       <div>
         <small>本月採購額</small>
-        <strong>52,300</strong>
+        <strong>0</strong>
       </div>
       <div>
         <small>本月回饋金</small>
-        <strong>1,248</strong>
+        <strong>0</strong>
       </div>
     </section>
 
@@ -55,6 +59,16 @@
     </div>
   </div>
 
-  <script src="app.js?v=99999999"></script>
+  <div id="ordersPage" class="page hidden">
+    <header class="topbar">
+      <button onclick="backHome()">←</button>
+      <strong>我的訂單</strong>
+      <span></span>
+    </header>
+
+    <div id="ordersList"></div>
+  </div>
+
+  <script src="app.js?v=2026061627"></script>
 </body>
 </html>
