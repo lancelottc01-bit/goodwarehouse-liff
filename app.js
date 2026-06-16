@@ -1,4 +1,4 @@
-const API_URL = 'https://script.google.com/macros/s/AKfycbzdeK0Q5dCmMyhUMNY__z2wzB6p51P_8immSPm962AsznqL2aTisptzhK-zGUZamoY5_Q/exec';
+const API_URL = 'https://script.google.com/macros/s/AKfycbzmFil6cgmSIfzO30eKXW5cUaMMhytwUBzefDP2dGJf-L-f8SUCTfCedtUYYBsx4_Z7VQ/exec';
 
 let products = [];
 let cart = JSON.parse(localStorage.getItem('goodwarehouse_cart') || '{}');
@@ -143,23 +143,51 @@ async function showOrders() {
     return;
   }
 
-  if (!data.orders || !data.orders.length) {
-    alert('目前沒有訂單');
+  $('app').classList.add('hidden');
+  $('cartPage').classList.add('hidden');
+  $('ordersPage').classList.remove('hidden');
+
+  const orders = data.orders || [];
+
+  if (!orders.length) {
+    $('ordersList').innerHTML = `
+      <div style="padding:24px;text-align:center;color:#6b7280;">
+        目前沒有訂單
+      </div>
+    `;
     return;
   }
 
-  let text = '我的訂單\n\n';
+  $('ordersList').innerHTML = orders.map(o => `
+    <div style="background:white;margin:14px;padding:18px;border-radius:18px;box-shadow:0 6px 18px rgba(0,0,0,.08);">
+      <div style="font-weight:900;color:#0046b8;margin-bottom:8px;">
+        ${o.orderId}
+      </div>
 
-  data.orders.forEach(o => {
-    text +=
-      '訂單編號：' + o.orderId + '\n' +
-      '日期：' + o.orderDate + '\n' +
-      '金額：' + money(o.orderAmount) + '\n' +
-      '回饋：' + money(o.rewardAmount) + '\n' +
-      '狀態：' + o.status + '\n\n';
-  });
+      <div style="color:#6b7280;font-size:14px;margin-bottom:12px;">
+        ${o.orderDate}
+      </div>
 
-  alert(text);
+      <div style="line-height:1.8;">
+        訂單金額：<b>${money(o.orderAmount)}</b><br>
+        本單回饋：<b>${money(o.rewardAmount)}</b>
+      </div>
+
+      <div style="margin-top:12px;padding:10px;border-radius:12px;background:#f3f6ff;font-weight:900;color:#0046b8;">
+        ${statusText(o.status)}
+      </div>
+    </div>
+  `).join('');
+}
+
+function statusText(status) {
+  if (status === 'new') return '🟡 新訂單';
+  if (status === '備貨中') return '📦 備貨中';
+  if (status === '缺貨待補') return '⚠️ 缺貨待補';
+  if (status === '待配送') return '🚚 待配送';
+  if (status === '配送中') return '🚚 配送中';
+  if (status === '已完成') return '✅ 已送達';
+  return status || '🟡 新訂單';
 }
 
 async function loadProducts() {
@@ -211,6 +239,7 @@ function renderProducts() {
     const rewardClass = Number(p.rewardRate) === 3 ? 'r3' : Number(p.rewardRate) === 1 ? 'r1' : 'r0';
     const rewardText = Number(p.rewardRate) > 0 ? `${p.rewardRate}% 回饋` : '不回饋';
     const unit = Number(p.purchaseUnit || 1);
+    const qty = Number(cart[p.productId] || 0);
 
     return `
       <div class="product-card">
@@ -227,23 +256,44 @@ function renderProducts() {
 
           <span class="reward ${rewardClass}">${rewardText}</span>
           ${unit > 1 ? `<div class="unit">需單包購買 ${unit} 入</div>` : ''}
-        </div>
 
-        <button class="add-btn" onclick="addToCart('${p.productId}')">+</button>
+          <div style="margin-top:12px;display:flex;align-items:center;gap:10px;">
+            ${
+              qty <= 0
+                ? `<button onclick="changeProductQty('${p.productId}', 1)" style="border:0;background:#0046b8;color:white;border-radius:999px;padding:10px 16px;font-weight:900;">加入補貨單</button>`
+                : `
+                  <button onclick="changeProductQty('${p.productId}', -1)" style="width:36px;height:36px;border:0;border-radius:50%;background:#e5e7eb;font-weight:900;">−</button>
+                  <strong style="min-width:36px;text-align:center;font-size:18px;">${qty}</strong>
+                  <button onclick="changeProductQty('${p.productId}', 1)" style="width:36px;height:36px;border:0;border-radius:50%;background:#0046b8;color:white;font-weight:900;">＋</button>
+                `
+            }
+          </div>
+        </div>
       </div>
     `;
   }).join('');
 }
 
-function addToCart(productId) {
+function changeProductQty(productId, direction) {
   const product = products.find(p => p.productId === productId);
   if (!product) return;
 
   const step = Number(product.purchaseUnit || 1);
-  cart[productId] = (cart[productId] || 0) + step;
+  const next = Number(cart[productId] || 0) + direction * step;
+
+  if (next <= 0) {
+    delete cart[productId];
+  } else {
+    cart[productId] = next;
+  }
 
   saveCart();
   updateCartCount();
+  renderProducts();
+}
+
+function addToCart(productId) {
+  changeProductQty(productId, 1);
 }
 
 function changeQty(productId, direction) {
@@ -262,6 +312,7 @@ function changeQty(productId, direction) {
   saveCart();
   updateCartCount();
   renderCart();
+  renderProducts();
 }
 
 function saveCart() {
@@ -269,17 +320,25 @@ function saveCart() {
 }
 
 function updateCartCount() {
-  $('cartCount').textContent = Object.keys(cart).length;
+  let totalQty = 0;
+
+  Object.keys(cart).forEach(id => {
+    totalQty += Number(cart[id] || 0);
+  });
+
+  $('cartCount').textContent = totalQty;
 }
 
 function showCart() {
   $('app').classList.add('hidden');
+  $('ordersPage').classList.add('hidden');
   $('cartPage').classList.remove('hidden');
   renderCart();
 }
 
 function backHome() {
   $('cartPage').classList.add('hidden');
+  $('ordersPage').classList.add('hidden');
   $('app').classList.remove('hidden');
 }
 
@@ -383,6 +442,7 @@ async function submitOrder() {
       backHome();
       renderProducts();
       loadCustomerSummary();
+      showOrders();
     } else {
       alert('下單失敗：' + (data.message || '未知錯誤'));
     }
