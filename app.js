@@ -258,8 +258,8 @@ async function submitOrder() {
       alert(
         '下單成功\n' +
         '訂單編號：' + data.orderId + '\n' +
-        '訂單金額：' + money(data.orderAmount) + '\n' +
-        '淨毛利：' + money(data.netProfit)
+        '本單總金額：' + money(data.orderAmount) + '\n' +
+        '本單回饋：' + money(data.rewardAmount)
       );
 
       cart = {};
